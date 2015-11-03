@@ -4,9 +4,7 @@
 #  * Automatically reads, parses and updates a .gitexternals file if it only
 #    contains lines in the form "# <directory> <giturl> <gittag>".
 #    This function parses the file for this pattern and then calls
-#    git_external on each found entry. Additionally it provides an
-#    update target to bump the tag to the master revision by
-#    recreating .gitexternals.
+#    git_external on each found entry.
 #  * Provides function
 #      git_external(<directory> <giturl> <gittag> [VERBOSE,SHALLOW]
 #        [RESET <files>])
@@ -263,9 +261,9 @@ if(EXISTS ${GIT_EXTERNALS} AND NOT GIT_EXTERNAL_SCRIPT_MODE)
         list(GET DATA 2 TAG)
 
         # Create a unique, flat name
-        string(REPLACE "/" "-" GIT_EXTERNAL_NAME ${DIR}_${PROJECT_NAME})
+        string(REPLACE "/" "-" GIT_EXTERNAL_NAME ${PROJECT_NAME}-${DIR})
 
-        if(NOT TARGET update_git_external_${GIT_EXTERNAL_NAME}) # not done
+        if(NOT TARGET ${GIT_EXTERNAL_NAME}-update) # not done
           # pull in identified external
           git_external(${DIR} ${REPO} ${TAG})
 
@@ -273,18 +271,21 @@ if(EXISTS ${GIT_EXTERNALS} AND NOT GIT_EXTERNAL_SCRIPT_MODE)
           if(NOT TARGET update)
             add_custom_target(update)
           endif()
-          if(NOT TARGET update_git_external)
-            add_custom_target(update_git_external)
+          if(NOT TARGET update-git-external)
+            add_custom_target(update-git-external)
             add_custom_target(flatten_git_external)
-            add_dependencies(update update_git_external)
+            add_dependencies(update update-git-external)
+          endif()
+          if(NOT TARGET ${PROJECT_NAME}-update-git-external)
+            add_custom_target(${PROJECT_NAME}-update-git-external)
           endif()
 
           # Create a unique, flat name
           file(RELATIVE_PATH GIT_EXTERNALS_BASE ${CMAKE_SOURCE_DIR}
             ${GIT_EXTERNALS})
-          string(REPLACE "/" "_" GIT_EXTERNAL_TARGET ${GIT_EXTERNALS_BASE})
+          string(REPLACE "/" "-" GIT_EXTERNAL_TARGET ${GIT_EXTERNALS_BASE})
 
-          set(GIT_EXTERNAL_TARGET update_git_external_${GIT_EXTERNAL_TARGET})
+          set(GIT_EXTERNAL_TARGET ${GIT_EXTERNAL_TARGET}-update)
           if(NOT TARGET ${GIT_EXTERNAL_TARGET})
             set(GIT_EXTERNAL_SCRIPT
               "${CMAKE_CURRENT_BINARY_DIR}/${GIT_EXTERNAL_TARGET}.cmake")
@@ -312,13 +313,14 @@ if(newref)
 else()
   file(APPEND ${GIT_EXTERNALS} \"# ${DIR} ${REPO} ${TAG}\n\")
 endif()")
-          add_custom_target(update_git_external_${GIT_EXTERNAL_NAME}
+          add_custom_target(${GIT_EXTERNAL_NAME}-update
             COMMAND "${CMAKE_COMMAND}" -DGIT_EXTERNAL_SCRIPT_MODE=1 -P ${GIT_EXTERNAL_SCRIPT}
             COMMENT "Update ${REPO} in ${GIT_EXTERNALS_BASE}"
             DEPENDS ${GIT_EXTERNAL_TARGET}
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-          add_dependencies(update_git_external
-            update_git_external_${GIT_EXTERNAL_NAME})
+          add_dependencies(${PROJECT_NAME}-update-git-external
+            ${GIT_EXTERNAL_NAME}-update)
+          add_dependencies(update-git-external ${GIT_EXTERNAL_NAME}-update)
 
           # Flattens a git external repository into its parent repo:
           # * Clean any changes from external
@@ -338,7 +340,7 @@ endif()")
           add_dependencies(flatten_git_external
             flatten_git_external_${GIT_EXTERNAL_NAME})
 
-          foreach(_target flatten_git_external_${GIT_EXTERNAL_NAME} flatten_git_external update_git_external_${GIT_EXTERNAL_NAME} ${GIT_EXTERNAL_TARGET} update_git_external update)
+          foreach(_target flatten_git_external_${GIT_EXTERNAL_NAME} flatten_git_external ${GIT_EXTERNAL_NAME}-update ${GIT_EXTERNAL_TARGET} ${PROJECT_NAME}-update-git-external update-git-external update)
             set_target_properties(${_target} PROPERTIES
               EXCLUDE_FROM_DEFAULT_BUILD ON FOLDER git)
           endforeach()
